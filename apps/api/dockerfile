@@ -1,22 +1,17 @@
-# Step 1: Build stage
+
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy root package.json dan package-lock.json
 COPY package*.json ./
 COPY apps/api/package*.json ./apps/api/
 
-# Install dependencies
 RUN npm ci --workspace=apps/api
 
-# Copy source code API
 COPY apps/api ./apps/api
 
-# Build TypeScript ke JavaScript (dist)
 RUN npm run build --workspace=apps/api
 
-# Step 2: Production stage
 FROM node:20-alpine AS runner
 
 WORKDIR /app
@@ -26,12 +21,10 @@ ENV NODE_ENV=production
 COPY package*.json ./
 COPY apps/api/package*.json ./apps/api/
 
-# Install hanya production dependencies
 RUN npm ci --only=production --workspace=apps/api
 
-# Copy hasil build dari stage sebelumnya
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 
 EXPOSE 3000
 
-CMD ["node", "apps/api/dist/index.js"]
+CMD ["node", "apps/api/dist/app.js"]
