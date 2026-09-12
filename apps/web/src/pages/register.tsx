@@ -1,14 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../lib/api';
-import { useAuth } from '../context/authcontext';
 
-export default function Login() {
+export default function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: FormEvent) => {
@@ -16,11 +14,10 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const res = await api.post('/auth/login', { email, password });
-      login(res.data.token, res.data.user);
-      navigate('/dashboard');
+      await api.post('/auth/register', { email, password });
+      navigate('/login');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Login gagal');
+      setError(err.response?.data?.error || 'Registrasi gagal');
     } finally {
       setLoading(false);
     }
@@ -29,7 +26,7 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl shadow-md w-full max-w-sm space-y-4">
-        <h1 className="text-2xl font-bold text-gray-900">Login</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Buat Akun</h1>
         {error && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</p>}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
@@ -46,6 +43,7 @@ export default function Login() {
           <input
             type="password"
             required
+            minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -56,10 +54,10 @@ export default function Login() {
           disabled={loading}
           className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
         >
-          {loading ? 'Loading...' : 'Login'}
+          {loading ? 'Loading...' : 'Daftar'}
         </button>
         <p className="text-sm text-gray-600 text-center">
-          Belum punya akun? <Link to="/register" className="text-blue-600 hover:underline">Register</Link>
+          Sudah punya akun? <Link to="/login" className="text-blue-600 hover:underline">Login</Link>
         </p>
       </form>
     </div>
