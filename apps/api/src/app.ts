@@ -9,14 +9,20 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const allowedOrigins = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: allowedOrigins.length > 0 ? allowedOrigins : '*',
+  credentials: true,
+}));
 
 app.use(helmet());
-app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-
-// Health check + tes koneksi database
 app.get('/health', async (_req, res) => {
   try {
     const result = await pool.query('SELECT NOW()');
@@ -27,6 +33,15 @@ app.get('/health', async (_req, res) => {
 });
 
 app.use(apiRoutes);
+
+app.use((_req, res) => {
+  res.status(404).json({ message: 'Endpoint tidak ditemukan.' });
+});
+
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('Unhandled Error:', err);
+  res.status(500).json({ message: 'Terjadi kesalahan tak terduga pada server.' });
+});
 
 app.listen(PORT, () => {
   console.log(`API running on http://localhost:${PORT}`);

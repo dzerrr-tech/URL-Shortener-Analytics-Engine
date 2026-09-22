@@ -1,25 +1,37 @@
 import { Request, Response } from 'express';
 import { redis } from '../config/redis';
 import { pool } from '../config/db';
+import { hashIp, detectDeviceType } from '../utils/clientinfo';
+
+const recordClick = (urlId: string, req: Request) => {
+  const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || 'unknown';
+  const userAgent = String(req.headers['user-agent'] || '');
+  const referrer = (req.headers['referer'] || req.headers['referrer'] || null) as string | null;
+
+  pool.query(
+    `INSERT INTO clicks (url_id, ip_hash, user_agent, referrer, device_type)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [urlId, hashIp(ip), userAgent, referrer, detectDeviceType(userAgent)]
+  ).catch((err) => console.error('Gagal mencatat klik:', err));
+
+  pool.query('UPDATE urls SET click_count = click_count + 1 WHERE id = $1', [urlId])
+    .catch((err) => console.error('Gagal update click_count:', err));
+};
 
 export const handleRedirect = async (req: Request, res: Response) => {
   const { shortCode } = req.params;
 
   try {
-    // 1. Cek dari Cache Redis terlebih dahulu (Cache Hit)
-    const cachedUrl = await redis.get(`url:${shortCode}`);
+    const cached = await redis.get(`url:${shortCode}`);
 
-    if (cachedUrl) {
-      // Async: Tambah hit count di PostgreSQL tanpa menunggu response (Non-blocking)
-      pool.query('UPDATE urls SET click_count = click_count + 1 WHERE short_code = $1', [shortCode])
-        .catch(err => console.error('Error updating click count:', err));
-
-      return res.redirect(302, cachedUrl);
+    if (cached) {
+      const { id, originalUrl } = JSON.parse(cached);
+      recordClick(id, req);
+      return res.redirect(302, originalUrl);
     }
 
-    // 2. Jika tidak ada di Cache (Cache Miss), Query ke PostgreSQL
     const result = await pool.query(
-      'SELECT id, original_url FROM urls WHERE short_code = $1',
+      'SELECT id, original_url, is_active, expires_at FROM urls WHERE short_code = $1',
       [shortCode]
     );
 
@@ -27,16 +39,25 @@ export const handleRedirect = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'URL tidak ditemukan.' });
     }
 
-    const originalUrl = result.rows[0].original_url;
+    const url = result.rows[0];
 
-    // 3. Simpan ke Redis Cache (Expire dalam 24 Jam = 86400 detik)
-    await redis.set(`url:${shortCode}`, originalUrl, 'EX', 86400);
+    if (!url.is_active) {
+      return res.status(410).json({ message: 'URL ini sudah dinonaktifkan.' });
+    }
 
-    // 4. Update click count
-    await pool.query('UPDATE urls SET click_count = click_count + 1 WHERE short_code = $1', [shortCode]);
+    if (url.expires_at && new Date(url.expires_at) < new Date()) {
+      return res.status(410).json({ message: 'URL ini sudah kedaluwarsa.' });
+    }
 
-    // 5. Redirect user ke URL Asli
-    return res.redirect(302, originalUrl);
+    await redis.set(
+      `url:${shortCode}`,
+      JSON.stringify({ id: url.id, originalUrl: url.original_url }),
+      'EX',
+      86400
+    );
+
+    recordClick(url.id, req);
+    return res.redirect(302, url.original_url);
   } catch (error) {
     console.error('Redirect Error:', error);
     return res.status(500).json({ message: 'Terjadi kesalahan pada server.' });

@@ -20,7 +20,7 @@ export default function Login() {
       login(res.data.token, res.data.user);
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Login gagal');
+      setError(err.response?.data?.message || 'Login gagal');
     } finally {
       setLoading(false);
     }

@@ -17,7 +17,7 @@ export default function Register() {
       await api.post('/auth/register', { email, password });
       navigate('/login');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Registrasi gagal');
+      setError(err.response?.data?.message || 'Registrasi gagal');
     } finally {
       setLoading(false);
     }
